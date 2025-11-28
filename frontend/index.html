@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>Geo Memory Support</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #f5f5f5;
+    }
+    .top-bar {
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      background: #fff;
+      border-bottom: 1px solid #ddd;
+    }
+    .page {
+      display: none;
+      padding: 16px;
+    }
+    .page.active {
+      display: block;
+    }
+    .card {
+      background: #fff;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    textarea {
+      width: 100%;
+      min-height: 100px;
+    }
+    button {
+      padding: 8px 12px;
+      background: #1976d2;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      margin-top: 8px;
+      cursor: pointer;
+    }
+    #map {
+      width: 100%;
+      height: calc(100vh - 56px);
+      background: #eee;
+    }
+  </style>
+
+  <!-- Google Maps JS (backend proxy 経由) -->
+  <script src="https://localhost:8000/maps-js" defer></script>
+</head>
+<body>
+
+  <div class="top-bar">
+    <div>Geo Memory Support</div>
+    <div>
+      <button onclick="showMessagePage()">メッセージ</button>
+      <button onclick="showMapPage()">マップ</button>
+    </div>
+  </div>
+
+  <!-- メッセージページ -->
+  <div id="page-message" class="page active">
+
+    <div class="card">
+      <strong>現在地</strong>
+      <p id="current-position">取得中...</p>
+    </div>
+
+    <div class="card">
+      <textarea id="message" placeholder="例：来週の火曜日に新宿センタービルで会議があります。"></textarea>
+      <button id="extractBtn">Geminiで抽出</button>
+      <span id="status"></span>
+    </div>
+
+    <div id="resultCard" class="card" style="display:none;">
+      <strong>場所</strong>
+      <div id="placesArea"></div>
+
+      <strong>時間</strong>
+      <div id="timesArea"></div>
+
+      <strong>行動</strong>
+      <div id="actionsArea"></div>
+
+      <button id="registerDestBtn">チェックした場所を目的地に登録</button>
+    </div>
+
+    <div class="card">
+      <strong>移動手段</strong>
+      <select id="travelMode">
+        <option value="WALKING">徒歩</option>
+        <option value="DRIVING">車</option>
+        <option value="BICYCLING">自転車</option>
+        <option value="TRANSIT">電車</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <strong>目的地リスト</strong>
+      <ul id="destList"></ul>
+    </div>
+
+  </div>
+
+  <!-- マップページ -->
+  <div id="page-map" class="page">
+    <div id="map"></div>
+  </div>
+
+<script>
+const API_SECRET = "my_super_secret_key_123";
+// ==========================
+
+// ページ切り替え
+function showMessagePage() {
+  document.getElementById("page-message").classList.add("active");
+  document.getElementById("page-map").classList.remove("active");
+}
+
+function showMapPage() {
+  document.getElementById("page-map").classList.add("active");
+  document.getElementById("page-message").classList.remove("active");
+  setTimeout(() => {
+    if (map) {
+      google.maps.event.trigger(map, "resize");
+      if (currentPosition) map.setCenter(currentPosition);
+    }
+  }, 200);
+}
+
+// 変数
+let map = null;
+let currentMarker = null;
+let currentPosition = null;
+let destinations = [];
+let directionsService = null;
+let directionsRenderer = null;
+
+// Google Maps 初期化
+function initializeMap() {
+  if (!google || !google.maps) return;
+
+  map = new google.maps.Map(document.getElementById("map"), {
+    center: { lat: 35.681236, lng: 139.767125 },
+    zoom: 14,
+  });
+
+  directionsService = new google.maps.DirectionsService();
+  directionsRenderer = new google.maps.DirectionsRenderer({ map });
+
+  startLocationTracking();
+}
+
+// 現在地トラッキング
+function startLocationTracking() {
+  updateCurrentPosition();
+  setInterval(updateCurrentPosition, 10000);
+}
+
+function updateCurrentPosition() {
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      currentPosition = { lat, lng };
+
+      document.getElementById("current-position").textContent =
+        `緯度: ${lat.toFixed(6)}, 経度: ${lng.toFixed(6)}`;
+
+      if (map) {
+        if (currentMarker) currentMarker.setPosition(currentPosition);
+        else {
+          currentMarker = new google.maps.Marker({
+            map,
+            position: currentPosition,
+            icon: { url:"https://maps.google.com/mapfiles/ms/icons/blue-dot.png" }
+          });
+        }
+        map.setCenter(currentPosition);
+      }
+    },
+    () => document.getElementById("current-position").textContent = "取得失敗"
+  );
+}
+
+// =======================
+// Gemini 抽出（HTTPS）
+// =======================
+document.getElementById("extractBtn").onclick = async () => {
+  const text = document.getElementById("message").value.trim();
+  if (!text) return alert("入力してください");
+
+  document.getElementById("status").textContent = "抽出中...";
+
+  const res = await fetch("https://localhost:8000/extract_with_gemini", {
+    method:"POST",
+    headers:{
+      "Content-Type": "application/json",
+      "x-api-key": API_SECRET
+    },
+    body:JSON.stringify({ text })
+  });
+
+  const data = await res.json();
+  renderExtractResult(data);
+};
+
+function renderExtractResult(data) {
+  const places = data.places || [];
+  const times = data.times || [];
+  const actions = data.actions || [];
+
+  document.getElementById("placesArea").innerHTML =
+    places.map(p => `<label><input type="checkbox" value="${p}">${p}</label><br>`).join("");
+
+  document.getElementById("timesArea").innerHTML =
+    times.map(t => `<span class="pill">${t}</span>`).join("");
+
+  document.getElementById("actionsArea").innerHTML =
+    actions.map(a => `<span class="pill">${a}</span>`).join("");
+
+  document.getElementById("resultCard").style.display = "block";
+  document.getElementById("status").textContent = "抽出完了";
+}
+
+// =======================
+// 目的地登録（HTTPS）
+// =======================
+document.getElementById("registerDestBtn").onclick = async () => {
+  const checks = document.querySelectorAll("#placesArea input:checked");
+  if (!checks.length) return alert("チェックしてください");
+
+  for (const cb of checks) {
+    const place = cb.value;
+
+    const geo = await fetch("https://localhost:8000/geocode", {
+      method:"POST",
+      headers:{
+        "Content-Type": "application/json",
+        "x-api-key": API_SECRET
+      },
+      body:JSON.stringify({ place })
+    }).then(r => r.json());
+
+    const marker = new google.maps.Marker({
+      map,
+      position:{ lat:geo.lat, lng:geo.lng },
+      title:place
+    });
+
+    destinations.push({
+      name:place,
+      lat:geo.lat,
+      lng:geo.lng,
+      marker,
+    });
+  }
+
+  updateDestList();
+};
+
+function updateDestList() {
+  const ul = document.getElementById("destList");
+  ul.innerHTML = destinations.map((d,i)=>`
+    <li>${d.name}
+      <button onclick="showRoute(${i})">ルート</button>
+      <button onclick="deleteDest(${i})">削除</button>
+    </li>
+  `).join("");
+}
+
+// ルート表示
+function showRoute(i) {
+  const d = destinations[i];
+  const mode = document.getElementById("travelMode").value;
+
+  directionsService.route({
+    origin: currentPosition,
+    destination:{ lat:d.lat, lng:d.lng },
+    travelMode: google.maps.TravelMode[mode]
+  }, (res, status) => {
+    if (status === "OK") {
+      directionsRenderer.setDirections(res);
+      showMapPage();
+    } else {
+      alert("ルート取得失敗");
+    }
+  });
+}
+
+function deleteDest(i) {
+  destinations[i].marker.setMap(null);
+  destinations.splice(i,1);
+  updateDestList();
+}
+
+// Google Maps 読み込み完了を待つ
+window.addEventListener("load", () => {
+  const timer = setInterval(() => {
+    if (google && google.maps) {
+      clearInterval(timer);
+      initializeMap();
+    }
+  }, 200);
+});
+</script>
+
+</body>
+</html>
