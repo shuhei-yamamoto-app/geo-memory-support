@@ -43,9 +43,11 @@ def require_api_key(x_api_key: str = Header(None)):
 # -----------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://shuhei-yamamoto-app.github.io"
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET","POST"],
     allow_headers=["*"],
 )
 
