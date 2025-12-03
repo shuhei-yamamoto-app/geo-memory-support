@@ -3,3 +3,5 @@
 *.key
 __pycache__/
 .venv/
+backend/gmail_credentials/
+frontend/index_final.html

@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from gemini_extractor import extract_with_gemini
 from geocoding import geocode_place
+from gmail_service import fetch_inbox_messages
 
 
 # -----------------------
@@ -114,6 +115,14 @@ async def geocode(req: GeocodeRequest):
     if result is None:
         raise HTTPException(400, "Geocoding failed")
     return result
+
+@app.get("/gmail/inbox")
+def get_gmail_inbox():
+    try:
+        inbox = fetch_inbox_messages(max_results=30)
+        return {"messages": inbox}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 # -----------------------
