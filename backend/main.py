@@ -10,9 +10,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from gemini_extractor import extract_with_gemini
-from geocoding import geocode_place
-from gmail_service import fetch_inbox_messages
+from backend.gemini_extractor import extract_with_gemini
+from backend.geocoding import geocode_place
+from backend.gmail_service import fetch_inbox_messages
 
 
 # -----------------------

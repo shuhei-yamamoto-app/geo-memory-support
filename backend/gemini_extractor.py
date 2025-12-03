@@ -3,9 +3,12 @@ import json
 import re
 import google.generativeai as genai
 
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
 API_KEY = os.environ.get("GEMINI_API_KEY")
 if not API_KEY:
-    raise RuntimeError("GOOGLE_API_KEY が設定されていません。")
+    raise RuntimeError("GEMINI_API_KEY が設定されていません。")
 
 genai.configure(api_key=API_KEY)
 
