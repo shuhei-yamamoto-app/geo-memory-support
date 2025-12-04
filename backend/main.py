@@ -45,6 +45,8 @@ def require_api_key(x_api_key: str = Header(None)):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
         "https://shuhei-yamamoto-app.github.io"
     ],
     allow_credentials=True,
