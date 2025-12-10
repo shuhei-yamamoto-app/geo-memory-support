@@ -5,14 +5,20 @@ import requests
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, Header
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from gemini_extractor import extract_with_gemini
 from geocoding import geocode_place
-from gmail_service import fetch_inbox_messages
+
+# OAuth/Gmail を新ファイルから読み込む
+from oauth_service import (
+    start_gmail_oauth,
+    handle_oauth_callback,
+    fetch_gmail_inbox
+)
 
 
 # -----------------------
@@ -118,17 +124,30 @@ async def geocode(req: GeocodeRequest):
         raise HTTPException(400, "Geocoding failed")
     return result
 
+
+# -----------------------
+# ⑧ Gmail OAuth（★ 新しく追加★）
+# -----------------------
+
+# Gmail認証開始
+@app.get("/gmail/login")
+def gmail_login():
+    return start_gmail_oauth()
+
+# Google が返してくる認可コードを受け取る
+@app.get("/oauth/callback")
+def gmail_callback(code: str):
+    token = handle_oauth_callback(code)
+    return {"status": "Gmail linked!", "token": token}
+
+# token を使って Gmail Inbox を取得
 @app.get("/gmail/inbox")
-def get_gmail_inbox():
-    try:
-        inbox = fetch_inbox_messages(max_results=30)
-        return {"messages": inbox}
-    except Exception as e:
-        return {"error": str(e)}
+def gmail_inbox():
+    return fetch_gmail_inbox()
 
 
 # -----------------------
-# ⑧ 最後に frontend をルートにマウント
+# ⑨ 最後に frontend をルートにマウント
 # -----------------------
 frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")

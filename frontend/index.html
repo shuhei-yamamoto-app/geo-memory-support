@@ -35,6 +35,21 @@
       <span id="status"></span>
     </div>
 
+    <div class="card">
+  <strong>Gmail INBOX</strong><br>
+
+  <!-- ★ これを追加 -->
+  <button onclick="window.location.href='https://geo-memory-support-backend.onrender.com/gmail/login'">
+    Gmail と連携する
+  </button>
+  <br><br>
+
+  <button id="fetchGmailBtn">Gmail を取得</button>
+  <pre id="gmailResult" style="white-space:pre-wrap;"></pre>
+</div>
+
+
+
     <div id="resultCard" class="card" style="display:none;">
       <strong>場所</strong>
       <div id="placesArea"></div>
@@ -74,6 +89,7 @@
   <script src="js/main.js"></script>
   <script src="js/extractor.js"></script>
   <script src="js/map.js"></script>
+  <script src="js/gmail.js"></script>
 
 </body>
 </html>
